@@ -158,8 +158,8 @@ tbody tr:hover{background:var(--card-2)}
         </div>
         <input id="file" type="file" accept="image/*" multiple hidden>
       </label>
-      <div class="actions"><button class="btn ghost" id="camBtn" style="flex:1">📷 Use camera</button></div>
-      <div class="rowform"><input id="lat" placeholder="Latitude (if no GPS)"><input id="lng" placeholder="Longitude"></div>
+      <div class="actions"><button class="btn ghost" id="camBtn" style="flex:1">📷 Use camera</button><button class="btn ghost" id="geoBtn" style="flex:1">📍 My location</button></div>
+      <div class="rowform"><input id="lat" placeholder="Latitude"><input id="lng" placeholder="Longitude"></div>
       <div class="actions"><button class="btn primary" id="analyze" style="flex:1">Analyze &amp; Save</button></div>
       <div class="result" id="result">
         <img id="resImg" alt="detections">
@@ -388,6 +388,15 @@ $('camShot').onclick=()=>{const v=$('cam'),c=document.createElement('canvas');c.
 /* ---------- misc ---------- */
 $('tt').onclick=()=>{const r=document.documentElement,c=r.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');r.setAttribute('data-theme',c==='dark'?'light':'dark');};
 $('newBtn').onclick=()=>{$('reportPanel').scrollIntoView({behavior:'smooth'});$('file').click();};
+$('geoBtn').onclick=()=>{
+  if(!navigator.geolocation){toast('Geolocation not supported on this browser');return;}
+  $('geoBtn').textContent='📍 Locating…';
+  navigator.geolocation.getCurrentPosition(p=>{
+    $('lat').value=p.coords.latitude.toFixed(6);$('lng').value=p.coords.longitude.toFixed(6);
+    $('geoBtn').textContent='📍 Location set ✓';toast('Location captured');
+  },e=>{$('geoBtn').textContent='📍 My location';toast('Location blocked — allow it, or type lat/long');},
+  {enableHighAccuracy:true,timeout:10000,maximumAge:0});
+};
 let tmr;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(tmr);tmr=setTimeout(()=>t.classList.remove('on'),2600);}
 
 /* ---------- boot ---------- */
