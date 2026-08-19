@@ -1,0 +1,9 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+onnxruntime>=1.17
+opencv-python-headless>=4.8
+numpy
+pillow
+fpdf2>=2.7
+supabase>=2.0

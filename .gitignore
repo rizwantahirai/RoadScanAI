@@ -1,0 +1,26 @@
+# runtime / generated
+roadscan.db
+uploads/
+__pycache__/
+*.pyc
+
+# not needed for the Render deploy (keep the repo small)
+models/*.pt
+samples/
+runs/
+eval_rdd/
+testvid/
+scripts/
+prep_samples.py
+infer.py
+app.py
+deploy_hf.py
+share.sh
+cloudflared
+dashboard_mockup.html
+*.mp4
+*.zip
+DEPLOY_HF_SPACES.md
+PRE_POST_PROCESSING.md
+eval_rdd.py
+eval_cctv_honest.py
