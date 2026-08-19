@@ -199,10 +199,27 @@ tbody tr:hover{background:var(--card-2)}
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const $=id=>document.getElementById(id);
-const CONF=0.25, IOU=0.5, SIZE=640, CRACK={0:1,1:1,2:1};
-const NAME={0:"crack",1:"pothole"}, COL={0:"#E8823C",1:"#D6453F"};
 const KEY="roadscan_reports_v1";
+// defaults — overridden by config.json at boot
+let CFG={}, CONF=0.25, IOU=0.5, SIZE=640, MODELFILE='models/YOLOv8_Small_RDD.onnx';
+let CRACKSET=new Set([0,1,2]), NAME={0:"crack",1:"pothole"}, COL={0:"#E8823C",1:"#D6453F"};
+let SEV={pot:2,high:0.6,med:0.6}, MAXREPORTS=40, SHOWSEEDS=true, MAPC={lat:31.52,lng:74.35,zoom:12};
 let session=null, map, markers=[], pendingFiles=[], lastIds=[], REPORTS={}, curId=null;
+function applyConfig(c){
+  CFG=c||{};
+  const m=c.model||{}, cl=c.classes||{}, sv=c.severity||{}, st=c.storage||{}, mp=c.map||{}, ap=c.app||{};
+  if(m.confThreshold!=null)CONF=m.confThreshold; if(m.iouThreshold!=null)IOU=m.iouThreshold;
+  if(m.inputSize!=null)SIZE=m.inputSize; if(m.file)MODELFILE=m.file;
+  if(cl.crackSubtypeIds)CRACKSET=new Set(cl.crackSubtypeIds);
+  if(cl.names)NAME={0:cl.names.crack||'crack',1:cl.names.pothole||'pothole'};
+  if(cl.colors)COL={0:cl.colors.crack||COL[0],1:cl.colors.pothole||COL[1]};
+  SEV={pot:sv.highIfPotholesAtLeast??2, high:sv.highConf??0.6, med:sv.mediumConf??0.6};
+  if(st.maxReports!=null)MAXREPORTS=st.maxReports; if(st.showSeeds!=null)SHOWSEEDS=st.showSeeds;
+  MAPC={lat:mp.centerLat??31.52, lng:mp.centerLng??74.35, zoom:mp.zoom??12};
+  if(ap.title)document.title=ap.title;
+  if(ap.cityLabel){const h=document.querySelector('#mapPanel .phead h2'); if(h)h.textContent='Damage map · '+ap.cityLabel;}
+  if(ap.footer){const f=document.querySelector('.foot'); if(f)f.textContent=ap.footer;}
+}
 
 /* ---------- storage (localStorage) ---------- */
 const SEED=[
@@ -213,10 +230,10 @@ const SEED=[
  {id:"RS-SEED5",crack:3,pothole:0,conf:0.58,lat:31.5305,lng:74.3489,mins:1200,severity:"Low",img:"seed/seed5.jpg"},
 ];
 function load(){try{return JSON.parse(localStorage.getItem(KEY))||null}catch(e){return null}}
-function persist(a){try{localStorage.setItem(KEY,JSON.stringify(a.slice(0,40)))}catch(e){}}
+function persist(a){try{localStorage.setItem(KEY,JSON.stringify(a.slice(0,MAXREPORTS)))}catch(e){}}
 function getReports(){
   let a=load();
-  if(!a){const now=Date.now();a=SEED.map(s=>({...s,ts:fmt(now-s.mins*60000)}));persist(a);}
+  if(!a){const now=Date.now();a=SHOWSEEDS?SEED.map(s=>({...s,ts:fmt(now-s.mins*60000)})):[];persist(a);}
   return a;
 }
 function addReport(r){const a=getReports();a.unshift(r);persist(a);}
@@ -225,7 +242,7 @@ function fmt(ms){const d=new Date(ms);const p=n=>(''+n).padStart(2,'0');return `
 /* ---------- model + detection ---------- */
 async function loadModel(){
   ort.env.wasm.numThreads=1;
-  session=await ort.InferenceSession.create('models/YOLOv8_Small_RDD.onnx',{executionProviders:['wasm']});
+  session=await ort.InferenceSession.create(MODELFILE,{executionProviders:['wasm']});
 }
 function letterbox(img){
   const w=img.naturalWidth||img.width,h=img.naturalHeight||img.height,r=Math.min(SIZE/w,SIZE/h);
@@ -251,7 +268,7 @@ async function detect(img){
   for(let a=0;a<n;a++){let best=0,bi=0;for(let c=0;c<4;c++){const v=data[(4+c)*n+a];if(v>best){best=v;bi=c;}}
     if(best<CONF)continue;const cx=data[a],cy=data[n+a],ww=data[2*n+a],hh=data[3*n+a];
     boxes.push([(cx-ww/2-dw)/r,(cy-hh/2-dh)/r,(cx+ww/2-dw)/r,(cy+hh/2-dh)/r]);scores.push(best);cls.push(bi);}
-  return nms(boxes,scores).map(i=>({box:boxes[i],score:scores[i],cls:CRACK[cls[i]]?0:1}));
+  return nms(boxes,scores).map(i=>({box:boxes[i],score:scores[i],cls:CRACKSET.has(cls[i])?0:1}));
 }
 function annotate(img,dets){
   const w=img.naturalWidth||img.width,h=img.naturalHeight||img.height;
@@ -265,8 +282,10 @@ function annotate(img,dets){
 }
 
 /* ---------- map + render ---------- */
-map=L.map('map',{scrollWheelZoom:false}).setView([31.52,74.35],12);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+function initMap(){
+  map=L.map('map',{scrollWheelZoom:false}).setView([MAPC.lat,MAPC.lng],MAPC.zoom);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+}
 function clearPins(){markers.forEach(m=>map.removeLayer(m));markers=[];}
 function css(v){return getComputedStyle(document.body).getPropertyValue(v).trim();}
 function esc(s){return(''+s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
@@ -312,7 +331,7 @@ $('analyze').onclick=async()=>{
       try{gps=await exifr.gps(f);}catch(e){}
       if(gps&&gps.latitude!=null){lat=+gps.latitude.toFixed(6);lng=+gps.longitude.toFixed(6);src='photo GPS';}
       else if($('lat').value&&$('lng').value){lat=parseFloat($('lat').value);lng=parseFloat($('lng').value);src='manual';}
-      const sev=(a.pothole>=2||(a.tt===1&&a.top>=0.6))?'High':(a.top>=0.6?'Medium':((a.crack||a.pothole)?'Low':'None'));
+      const sev=(a.pothole>=SEV.pot||(a.tt===1&&a.top>=SEV.high))?'High':(a.top>=SEV.med?'Medium':((a.crack||a.pothole)?'Low':'None'));
       const id='RS-'+Math.random().toString(36).slice(2,8).toUpperCase();
       const rec={id,ts:fmt(Date.now()),lat,lng,crack:a.crack,pothole:a.pothole,severity:sev,conf:+a.top.toFixed(3),img:a.url,source:src};
       addReport(rec);lastIds.push(id);tc+=a.crack;tp+=a.pothole;last=rec;
@@ -400,9 +419,15 @@ $('geoBtn').onclick=()=>{
 let tmr;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(tmr);tmr=setTimeout(()=>t.classList.remove('on'),2600);}
 
 /* ---------- boot ---------- */
-render();
-loadModel().then(()=>{$('loader').style.opacity='0';setTimeout(()=>$('loader').style.display='none',400);})
-  .catch(e=>{$('loadmsg').textContent='Could not load the model. Refresh to retry.';console.error(e);});
+async function boot(){
+  try{const r=await fetch('config.json',{cache:'no-store'});if(r.ok)applyConfig(await r.json());}
+  catch(e){console.warn('config.json not loaded — using defaults',e);}
+  initMap();
+  render();
+  loadModel().then(()=>{$('loader').style.opacity='0';setTimeout(()=>$('loader').style.display='none',400);})
+    .catch(e=>{$('loadmsg').textContent='Could not load the model. Refresh to retry.';console.error(e);});
+}
+boot();
 </script>
 </body>
 </html>

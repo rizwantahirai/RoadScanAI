@@ -1,0 +1,44 @@
+{
+  "_readme": "Edit this file to change RoadScan without touching code. After editing, run: git add config.json && git commit -m 'update config' && git push. The live site updates in ~1 min.",
+
+  "app": {
+    "title": "RoadScan",
+    "cityLabel": "Lahore",
+    "footer": "RoadScan · on-device crack & pothole detection with geotagging"
+  },
+
+  "model": {
+    "_note": "Swap in a new model by putting its .onnx in models/ and changing 'file'. inputSize must match what the model was exported at.",
+    "file": "models/YOLOv8_Small_RDD.onnx",
+    "inputSize": 640,
+    "confThreshold": 0.25,
+    "iouThreshold": 0.5
+  },
+
+  "classes": {
+    "_note": "crackSubtypeIds are the raw model classes treated as 'crack'; everything else is 'pothole'. For a different model, update these.",
+    "crackSubtypeIds": [0, 1, 2],
+    "names": { "crack": "crack", "pothole": "pothole" },
+    "colors": { "crack": "#E8823C", "pothole": "#D6453F" }
+  },
+
+  "severity": {
+    "_note": "How High/Medium/Low is decided.",
+    "highIfPotholesAtLeast": 2,
+    "highConf": 0.6,
+    "mediumConf": 0.6
+  },
+
+  "map": {
+    "_note": "Where the map centres on load.",
+    "centerLat": 31.52,
+    "centerLng": 74.35,
+    "zoom": 12
+  },
+
+  "storage": {
+    "_note": "maxReports = how many recent reports to keep in the browser. showSeeds = whether the 5 example reports appear.",
+    "maxReports": 40,
+    "showSeeds": true
+  }
+}
